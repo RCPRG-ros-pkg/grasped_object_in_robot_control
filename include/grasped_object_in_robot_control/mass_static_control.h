@@ -61,6 +61,7 @@ private:
     RTT::InputPort<VectorD> port_joint_position_;
     RTT::InputPort<VectorD> port_control_law_torque_command_;  
     RTT::OutputPort<VectorD> port_joint_torque_command_;
+    RTT::OutputPort<VectorD> port_mass_static_torque_command_;
 
     RTT::InputPort<uint8_t> port_object_grasped_right_command_;  
     RTT::InputPort<uint8_t> port_object_grasped_left_command_; 
@@ -80,7 +81,7 @@ private:
     std::vector<KDL::Frame> links_fk_;
     std::vector<std::string> link_names_;
 
-    std::vector<KDL::Vector> mass_position_, space_torque_, axis_local_, origin_local_, axis_0_;	
+    std::vector<KDL::Vector> mass_position_, space_torque_, axis_local_, origin_local_, axis_0_;    
     KDL::Vector last_joint_mass_position_6_right_, last_joint_mass_position_6_left_;
     KDL::Vector last_joint_mass_position_0_, gravity_force_0_;
 
@@ -96,13 +97,14 @@ MassStaticControl<DOFS>::MassStaticControl(const std::string &name)
     , port_object_grasped_right_command_("ObjectGraspedRightCommand_INPORT")
     , port_object_grasped_left_command_("ObjectGraspedLeftCommand_INPORT")       
     , port_joint_torque_command_("JointTorqueCommand_OUTPORT")
+    , port_mass_static_torque_command_("MassStaticTorqueCommand_OUTPORT")
 {
     this->ports()->addPort(port_joint_position_);
-    this->ports()->addPort(port_control_law_torque_command_);     
-    this->ports()->addPort(port_joint_torque_command_);
-
+    this->ports()->addPort(port_control_law_torque_command_);
     this->ports()->addPort(port_object_grasped_right_command_);   
     this->ports()->addPort(port_object_grasped_left_command_);   
+    this->ports()->addPort(port_joint_torque_command_);
+    this->ports()->addPort(port_mass_static_torque_command_);
 
     this->addProperty("robot_description", robot_description_);
     this->addProperty("articulated_joint_names", articulated_joint_names_);
@@ -179,14 +181,14 @@ bool MassStaticControl<DOFS>::configureHook()
 template<unsigned int DOFS>
 bool MassStaticControl<DOFS>::startHook()
 {
-	//
+    //
     return true;
 }
 
 template<unsigned int DOFS>
 void MassStaticControl<DOFS>::stopHook() 
 {
-	//	
+    //  
 }
 
 template<unsigned int DOFS>
@@ -228,7 +230,7 @@ void MassStaticControl<DOFS>::updateHook()
     {
         RTT::Logger::In in("MassStaticControl::updateHook");
         Logger::log() << "New data transfered to object_grasped_right_ variable" << Logger::endl;
-        std::cout << "object_grasped_right_: " << +object_grasped_right_  << std::endl;
+        //std::cout << "object_grasped_right_: " << object_grasped_right_  << std::endl;
 
         if (object_grasped_right_ == true)
         {
@@ -240,7 +242,7 @@ void MassStaticControl<DOFS>::updateHook()
     {
         RTT::Logger::In in("MassStaticControl::updateHook");
         Logger::log() << "New data transfered to object_grasped_left_ variable" << Logger::endl;
-        std::cout << "object_grasped_left_: " << +object_grasped_left_  << std::endl;
+        //std::cout << "object_grasped_left_: " << object_grasped_left_  << std::endl;
 
         if (object_grasped_left_ == true)
         {
@@ -261,11 +263,11 @@ void MassStaticControl<DOFS>::updateHook()
     calculateTorqueVector(object_grasped_right_, &object_grasped_right_prev_, rightLWR_joint0_idx_, last_joint_mass_position_6_right_);   
     calculateTorqueVector(object_grasped_left_, &object_grasped_left_prev_, leftLWR_joint0_idx_, last_joint_mass_position_6_left_);
 
-    for (int j = 0; j < DOFS; j++)
-    {
-        std::cout << "mass_static_torque_command_" << j << "_: " << mass_static_torque_command_[j] << std::endl;
-        std::cout << "control_law_torque_command_" << j << "_: " << control_law_torque_command_[j] << std::endl; 
-    }
+    // for (int j = 0; j < DOFS; j++)
+    // {
+    //     std::cout << "mass_static_torque_command_" << j << "_: " << mass_static_torque_command_[j] << std::endl;
+    //     std::cout << "control_law_torque_command_" << j << "_: " << control_law_torque_command_[j] << std::endl; 
+    // }
 
     if (!mass_static_torque_command_.allFinite())
     {
@@ -286,10 +288,11 @@ void MassStaticControl<DOFS>::updateHook()
     }
 
     port_joint_torque_command_.write(joint_torque_command_);
+    port_mass_static_torque_command_.write(mass_static_torque_command_);
 }
 
 template<unsigned int DOFS>
-void MassStaticControl<DOFS>::calculateTorqueVector(uint8_t object_grasped, uint8_t *object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6)
+void MassStaticControl<DOFS>::calculateTorqueVector(uint8_t object_grasped, uint8_t* object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6)
 {
     if (object_grasped == true)
     {
