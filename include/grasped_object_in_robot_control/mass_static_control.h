@@ -55,16 +55,18 @@ public:
 private:
     void calculateTorqueVector(uint8_t object_grasped, uint8_t *object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6);
 
-    typedef Eigen::Matrix<double, DOFS, 1>  VectorD;
-    typedef Eigen::Matrix<double, DOFS, DOFS>  MatrixDD;
+    typedef Eigen::Matrix<double, DOFS, 1> VectorD;
 
     RTT::InputPort<VectorD> port_joint_position_;
     RTT::InputPort<VectorD> port_control_law_torque_command_;  
+    RTT::OutputPort<VectorD> port_mass_static_torque_command_;    
     RTT::OutputPort<VectorD> port_joint_torque_command_;
-    RTT::OutputPort<VectorD> port_mass_static_torque_command_;
 
     RTT::InputPort<uint8_t> port_object_grasped_right_command_;  
-    RTT::InputPort<uint8_t> port_object_grasped_left_command_; 
+    RTT::InputPort<uint8_t> port_object_grasped_left_command_;
+    RTT::InputPort<double> port_identified_weight_of_the_object_; 
+    RTT::InputPort<KDL::Vector> port_identified_center_of_mass_location_right_; 
+    RTT::InputPort<KDL::Vector> port_identified_center_of_mass_location_left_; 
 
     VectorD joint_position_;
     VectorD control_law_torque_command_;
@@ -73,6 +75,8 @@ private:
     
     uint8_t object_grasped_right_, object_grasped_right_prev_;
     uint8_t object_grasped_left_, object_grasped_left_prev_;
+    double identified_weight_of_the_object_;
+    KDL::Vector identified_center_of_mass_location_;
 
     std::string robot_description_;
     std::vector<std::string> articulated_joint_names_;
@@ -85,7 +89,7 @@ private:
     KDL::Vector last_joint_mass_position_6_right_, last_joint_mass_position_6_left_;
     KDL::Vector last_joint_mass_position_0_, gravity_force_0_;
 
-    double m_, g_;
+    // double mass_of_the_object_, gravitational_acceleration_;
     int rightLWR_joint0_idx_, leftLWR_joint0_idx_;
 };
 
@@ -95,14 +99,20 @@ MassStaticControl<DOFS>::MassStaticControl(const std::string &name)
     , port_joint_position_("JointPosition_INPORT")
     , port_control_law_torque_command_("ControlLawTorqueCommand_INPORT")
     , port_object_grasped_right_command_("ObjectGraspedRightCommand_INPORT")
-    , port_object_grasped_left_command_("ObjectGraspedLeftCommand_INPORT")       
+    , port_object_grasped_left_command_("ObjectGraspedLeftCommand_INPORT")
+    , port_identified_weight_of_the_object_("IdentifiedWeightOfTheObject_INPORT") 
+    , port_identified_center_of_mass_location_right_("IdentifiedCenterOfMassLocationRight_INPORT")        
+    , port_identified_center_of_mass_location_left_("IdentifiedCenterOfMassLocationLeft_INPORT")               
     , port_joint_torque_command_("JointTorqueCommand_OUTPORT")
-    , port_mass_static_torque_command_("MassStaticTorqueCommand_OUTPORT")
+    , port_mass_static_torque_command_("MassStaticTorqueCommand_OUTPORT")    
 {
     this->ports()->addPort(port_joint_position_);
     this->ports()->addPort(port_control_law_torque_command_);
     this->ports()->addPort(port_object_grasped_right_command_);   
-    this->ports()->addPort(port_object_grasped_left_command_);   
+    this->ports()->addPort(port_object_grasped_left_command_);
+    this->ports()->addPort(port_identified_weight_of_the_object_);
+    this->ports()->addPort(port_identified_center_of_mass_location_right_);
+    this->ports()->addPort(port_identified_center_of_mass_location_left_);               
     this->ports()->addPort(port_joint_torque_command_);
     this->ports()->addPort(port_mass_static_torque_command_);
 
@@ -110,7 +120,7 @@ MassStaticControl<DOFS>::MassStaticControl(const std::string &name)
     this->addProperty("articulated_joint_names", articulated_joint_names_);
     this->addProperty("rightLWR_joint0_idx", rightLWR_joint0_idx_);
     this->addProperty("leftLWR_joint0_idx", leftLWR_joint0_idx_);    
-    this->addProperty("mass_of_the_object", m_);
+    // this->addProperty("mass_of_the_object", mass_of_the_object_);
 }
 
 template<unsigned int DOFS>
@@ -156,19 +166,21 @@ bool MassStaticControl<DOFS>::configureHook()
     object_grasped_right_prev_ = false;
     object_grasped_left_prev_ = false;
 
-    g_ = 9.80665;
+    // gravitational_acceleration_ = 9.80665;
 
-    last_joint_mass_position_6_right_[0] = 0.3;
+    last_joint_mass_position_6_right_[0] = 0.27;
     last_joint_mass_position_6_right_[1] = 0.0;
     last_joint_mass_position_6_right_[2] = -0.078;
 
-    last_joint_mass_position_6_left_[0] = -0.3;
+    last_joint_mass_position_6_left_[0] = -0.27;
     last_joint_mass_position_6_left_[1] = 0.0;
     last_joint_mass_position_6_left_[2] = -0.078;
 
-    gravity_force_0_[0] = 0.0;
-    gravity_force_0_[1] = 0.0;
-    gravity_force_0_[2] = -m_*g_;   
+    // SetToZero(last_joint_mass_position_6_right_);
+    // SetToZero(last_joint_mass_position_6_left_);
+    // SetToZero(gravity_force_0_);
+
+    // gravity_force_0_[2] = -mass_of_the_object_ * gravitational_acceleration_;   
 
     for (int l_idx = 0; l_idx < DOFS; l_idx++)
     {
@@ -224,6 +236,30 @@ void MassStaticControl<DOFS>::updateHook()
         error();
         Logger::log() << Logger::Error << getName() << " control_law_torque_command_ contains NaN or inf" << Logger::endl;
         return;
+    }
+
+    if (port_identified_weight_of_the_object_.read(identified_weight_of_the_object_) == RTT::NewData) 
+    {
+        RTT::Logger::In in("MassStaticControl::updateHook");
+        Logger::log() << "New data transfered to identified_weight_of_the_object_ variable" << Logger::endl;
+
+        gravity_force_0_[2] = -identified_weight_of_the_object_;
+    }
+
+    if (port_identified_center_of_mass_location_right_.read(identified_center_of_mass_location_) == RTT::NewData) 
+    {
+        RTT::Logger::In in("MassStaticControl::updateHook");
+        Logger::log() << "New data transfered to identified_center_of_mass_location_ (right) variable" << Logger::endl;
+
+        last_joint_mass_position_6_right_ = identified_center_of_mass_location_;
+    }
+
+    if (port_identified_center_of_mass_location_left_.read(identified_center_of_mass_location_) == RTT::NewData) 
+    {
+        RTT::Logger::In in("MassStaticControl::updateHook");
+        Logger::log() << "New data transfered to identified_center_of_mass_location_ (left) variable" << Logger::endl;
+
+        last_joint_mass_position_6_left_ = identified_center_of_mass_location_;
     }
 
     if (port_object_grasped_right_command_.read(object_grasped_right_) == RTT::NewData) 

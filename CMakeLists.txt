@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   rtt_rosparam
   eigen_conversions
   kin_dyn_model
+#  controller_common
   )
 
 find_package(OROCOS-RTT REQUIRED COMPONENTS rtt-scripting rtt-transport-corba)
@@ -40,7 +41,7 @@ include_directories(${USE_OROCOS_INCLUDE_DIRS} include)
 # Export package information (replaces catkin_package() macro) 
 orocos_generate_package(
   INCLUDE_DIRS include
-  DEPENDS rtt_ros message_runtime rtt_roscomm rtt_rosparam kin_dyn_model
+  DEPENDS rtt_ros message_runtime rtt_roscomm rtt_rosparam kin_dyn_model #controller_common
   DEPENDS_TARGETS rtt_ros rtt_rosparam
 )
 

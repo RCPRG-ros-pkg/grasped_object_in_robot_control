@@ -17,11 +17,13 @@
   <build_depend>rtt_rosparam</build_depend>
   <build_depend>eigen_conversions</build_depend>
   <build_depend>kin_dyn_model</build_depend>
+<!--   <build_depend>controller_common</build_depend> -->
 
   <run_depend>rtt</run_depend>
   <run_depend>ocl</run_depend>
   <run_depend>rtt_ros</run_depend>
   <run_depend>rtt_rosparam</run_depend>
   <run_depend>kin_dyn_model</run_depend>
+<!--   <run_depend>controller_common</run_depend>   -->
 
 </package>
