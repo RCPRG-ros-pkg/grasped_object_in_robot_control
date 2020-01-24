@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Robot Control and Pattern Recognition Group,
+// Copyright (c) 2019-2020, Robot Control and Pattern Recognition Group,
 // Institute of Control and Computation Engineering
 // Warsaw University of Technology
 //
@@ -76,7 +76,7 @@ private:
     uint8_t object_grasped_right_, object_grasped_right_prev_;
     uint8_t object_grasped_left_, object_grasped_left_prev_;
     double identified_weight_of_the_object_;
-    KDL::Vector identified_center_of_mass_location_;
+    KDL::Vector position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_;
 
     std::string robot_description_;
     std::vector<std::string> articulated_joint_names_;
@@ -168,17 +168,17 @@ bool MassStaticControl<DOFS>::configureHook()
 
     // gravitational_acceleration_ = 9.80665;
 
-    last_joint_mass_position_6_right_[0] = 0.27;
-    last_joint_mass_position_6_right_[1] = 0.0;
-    last_joint_mass_position_6_right_[2] = -0.078;
+    // last_joint_mass_position_6_right_[0] = 0.27;
+    // last_joint_mass_position_6_right_[1] = 0.0;
+    // last_joint_mass_position_6_right_[2] = -0.078;
 
-    last_joint_mass_position_6_left_[0] = -0.27;
-    last_joint_mass_position_6_left_[1] = 0.0;
-    last_joint_mass_position_6_left_[2] = -0.078;
+    // last_joint_mass_position_6_left_[0] = -0.27;
+    // last_joint_mass_position_6_left_[1] = 0.0;
+    // last_joint_mass_position_6_left_[2] = -0.078;
 
-    // SetToZero(last_joint_mass_position_6_right_);
-    // SetToZero(last_joint_mass_position_6_left_);
-    // SetToZero(gravity_force_0_);
+    SetToZero(last_joint_mass_position_6_right_);
+    SetToZero(last_joint_mass_position_6_left_);
+    SetToZero(gravity_force_0_);
 
     // gravity_force_0_[2] = -mass_of_the_object_ * gravitational_acceleration_;   
 
@@ -246,20 +246,24 @@ void MassStaticControl<DOFS>::updateHook()
         gravity_force_0_[2] = -identified_weight_of_the_object_;
     }
 
-    if (port_identified_center_of_mass_location_right_.read(identified_center_of_mass_location_) == RTT::NewData) 
+    if (port_identified_center_of_mass_location_right_.read(position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_) == RTT::NewData) 
     {
         RTT::Logger::In in("MassStaticControl::updateHook");
-        Logger::log() << "New data transfered to identified_center_of_mass_location_ (right) variable" << Logger::endl;
+        Logger::log() << "New data transfered to position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_ (right) variable" << Logger::endl;
 
-        last_joint_mass_position_6_right_ = identified_center_of_mass_location_;
+        last_joint_mass_position_6_right_[0] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[0] + 0.115;
+        last_joint_mass_position_6_right_[1] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[1];
+        last_joint_mass_position_6_right_[2] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[2] - 0.078;        
     }
 
-    if (port_identified_center_of_mass_location_left_.read(identified_center_of_mass_location_) == RTT::NewData) 
+    if (port_identified_center_of_mass_location_left_.read(position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_) == RTT::NewData) 
     {
         RTT::Logger::In in("MassStaticControl::updateHook");
-        Logger::log() << "New data transfered to identified_center_of_mass_location_ (left) variable" << Logger::endl;
+        Logger::log() << "New data transfered to position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_ (left) variable" << Logger::endl;
 
-        last_joint_mass_position_6_left_ = identified_center_of_mass_location_;
+        last_joint_mass_position_6_left_[0] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[0] - 0.115;
+        last_joint_mass_position_6_left_[1] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[1];
+        last_joint_mass_position_6_left_[2] = position_vector_from_ft_sensor_to_center_of_mass_location_in_wrist_frame_[2] - 0.078;                
     }
 
     if (port_object_grasped_right_command_.read(object_grasped_right_) == RTT::NewData) 
