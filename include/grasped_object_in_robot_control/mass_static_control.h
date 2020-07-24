@@ -53,7 +53,7 @@ public:
     void updateHook();
 
 private:
-    void calculateTorqueVector(uint8_t object_grasped, uint8_t *object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6);
+    void calculateTorqueVector(uint8_t object_grasped, uint8_t *object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6, double* soft_switch_factor);
 
     typedef Eigen::Matrix<double, DOFS, 1> VectorD;
 
@@ -91,6 +91,7 @@ private:
 
     // double mass_of_the_object_, gravitational_acceleration_;
     int rightLWR_joint0_idx_, leftLWR_joint0_idx_;
+    double soft_switch_factor_right_, soft_switch_factor_left_;
 };
 
 template<unsigned int DOFS>
@@ -165,6 +166,8 @@ bool MassStaticControl<DOFS>::configureHook()
     mass_static_torque_command_.setZero();
     object_grasped_right_prev_ = false;
     object_grasped_left_prev_ = false;
+    soft_switch_factor_right_ = 0.0;
+    soft_switch_factor_left_ = 0.0;
 
     // gravitational_acceleration_ = 9.80665;
 
@@ -300,8 +303,8 @@ void MassStaticControl<DOFS>::updateHook()
         }
     }
 
-    calculateTorqueVector(object_grasped_right_, &object_grasped_right_prev_, rightLWR_joint0_idx_, last_joint_mass_position_6_right_);   
-    calculateTorqueVector(object_grasped_left_, &object_grasped_left_prev_, leftLWR_joint0_idx_, last_joint_mass_position_6_left_);
+    calculateTorqueVector(object_grasped_right_, &object_grasped_right_prev_, rightLWR_joint0_idx_, last_joint_mass_position_6_right_, &soft_switch_factor_right_);   
+    calculateTorqueVector(object_grasped_left_, &object_grasped_left_prev_, leftLWR_joint0_idx_, last_joint_mass_position_6_left_, &soft_switch_factor_left_);
 
     // for (int j = 0; j < DOFS; j++)
     // {
@@ -332,9 +335,40 @@ void MassStaticControl<DOFS>::updateHook()
 }
 
 template<unsigned int DOFS>
-void MassStaticControl<DOFS>::calculateTorqueVector(uint8_t object_grasped, uint8_t* object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6)
+void MassStaticControl<DOFS>::calculateTorqueVector(uint8_t object_grasped, uint8_t* object_grasped_prev, int idx, KDL::Vector last_joint_mass_position_6, double* soft_switch_factor)
 {
     if (object_grasped == true)
+    {
+        if (*soft_switch_factor < 1.0)
+        {
+            *soft_switch_factor += 0.001;
+        }
+        else
+        {
+            *soft_switch_factor = 1.0; // dodatkowe zabezpieczenie    
+        } 
+    }
+    else
+    {      
+        if (*object_grasped_prev == true)
+        {
+            if (*soft_switch_factor > 0.0)
+            {
+                *soft_switch_factor -= 0.001;
+            }
+            else
+            {
+                for (int j = 0; j < 7; j++)
+                {
+                    mass_static_torque_command_[idx+j] = 0.0;
+                }                
+                *object_grasped_prev = false;
+                *soft_switch_factor = 0.0; // dodatkowe zabezpieczenie            
+            }                                     
+        }
+    }
+
+    if (*object_grasped_prev == true)
     {
         last_joint_mass_position_0_ = links_fk_[idx+6].M * last_joint_mass_position_6;
         for (int j = 0; j < 7; j++)
@@ -347,19 +381,8 @@ void MassStaticControl<DOFS>::calculateTorqueVector(uint8_t object_grasped, uint
 
             kin_model_->getJointAxisAndOrigin(idx+j, axis_local_[j], origin_local_[j]);
             axis_0_[j] = links_fk_[idx+j].M * axis_local_[j];
-            mass_static_torque_command_[idx+j] = -(space_torque_[j](0)*axis_0_[j](0) + space_torque_[j](1)*axis_0_[j](1) + space_torque_[j](2)*axis_0_[j](2));
+            mass_static_torque_command_[idx+j] = -(space_torque_[j](0)*axis_0_[j](0) + space_torque_[j](1)*axis_0_[j](1) + space_torque_[j](2)*axis_0_[j](2))* (*soft_switch_factor);
             // std::cout << "right_arm_" << j << "_mass_static_torque_command_: " << mass_static_torque_command_[j+1] << std::endl;
-        }
-    }
-    else
-    {
-        if (*object_grasped_prev == true)
-        {
-            for (int j = 0; j < 7; j++)
-            {
-                mass_static_torque_command_[idx+j] = 0.0;
-            }
-            *object_grasped_prev = false;
         }
     }
 } 
